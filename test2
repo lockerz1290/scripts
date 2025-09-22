@@ -1,0 +1,51 @@
+    override fun groupData(leftRows: List<Data>, rightRows: List<Data>, groupProspects: List<GroupProspect>): List<DataGroup> {
+        var result: MutableList<DataGroup> = CacheList.list(mapDb)
+        result.add(DataGroup(leftRows, rightRows))
+
+        groupProspects.forEach {groupProspect ->
+            log.debug("Group prospect: $groupProspect")
+            val newResult: MutableList<DataGroup> = CacheList.list(mapDb)
+            log.debug("CacheList Created $groupProspect")
+            result.forEach {
+                log.debug("${it.leftRows}, ${it.rightRows}")
+                newResult.addAll(groupData(it.leftRows, it.rightRows, groupProspect))
+            }
+            result = newResult
+            log.debug("Group prospect finished: $groupProspect")
+        }
+        return result
+    }
+
+    override fun groupData(leftRows: List<Data>, rightRows: List<Data>, groupProspect: GroupProspect): List<DataGroup> {
+        //to wynieśc do funkcji wyżej
+        val leftGrouped = mapDb.treeMap<Any?, Any>(UUID.randomUUID().toString(), Serializer.JAVA, Serializer.JAVA).create()
+        leftGrouped.putAll(leftRows.groupBy { formatGroupKey(it.getValues()[groupProspect.leftField], groupProspect.asNumber) })
+
+        val rightGrouped = mapDb.treeMap<Any?, Any>(UUID.randomUUID().toString(), Serializer.JAVA, Serializer.JAVA).create()
+        rightGrouped.putAll(rightRows.groupBy { formatGroupKey(it.getValues().get(groupProspect.rightField), groupProspect.asNumber) })
+
+        //potencjalne miejsce tworzy niepotrzebne setki obiektów nie tworzyć miliona obiektów jedna lista i do niej dodawać
+        val result = CacheList.list<DataGroup>(mapDb)
+        log.debug("Cache List groupData Created left ${leftGrouped.size} right ${rightGrouped.size}")
+        (leftGrouped.keys + rightGrouped.keys).forEach { key ->
+            run {
+                val leftList = leftGrouped.getOrDefault(key, emptyList<Data>()) as List<Data>
+                val rightList = rightGrouped.getOrDefault(key, emptyList<Data>()) as List<Data>
+
+                if (leftList.isNotEmpty() && rightList.isNotEmpty()) {
+                    log.debug("Rows: ${leftList} / ${rightList}")
+                    result.add(DataGroup(leftList, rightList))
+                }
+            }
+        }
+        //wszystko zwraca jeden obiekt
+        log.debug("Cache List created result ${result.size}, ${result}")
+        return result
+    }
+
+interface Data {
+
+    fun getValues(): Map<String, Any>
+    fun getIds(): List<UUID>
+
+}
