@@ -1,0 +1,34 @@
+    override fun groupData(leftRows: List<Data>, rightRows: List<Data>, groupProspects: List<GroupProspect>): List<DataGroup> {
+        var result: MutableList<DataGroup> = CacheList.list(mapDb)
+        result.add(DataGroup(leftRows, rightRows))
+
+        groupProspects.forEach {groupProspect ->
+            log.debug("Group data for group prospect: $groupProspect")
+            val newResult: MutableList<DataGroup> = CacheList.list(mapDb)
+            result.forEach { newResult.addAll(groupData(it.leftRows, it.rightRows, groupProspect)) }
+            result = newResult
+        }
+        return result
+    }
+
+    override fun groupData(leftRows: List<Data>, rightRows: List<Data>, groupProspect: GroupProspect): List<DataGroup> {
+        val leftGrouped = mapDb.treeMap<Any?, Any>(UUID.randomUUID().toString(), Serializer.JAVA, Serializer.JAVA).create()
+        leftGrouped.putAll(leftRows.groupBy { formatGroupKey(it.getValues()[groupProspect.leftField], groupProspect.asNumber) })
+
+        val rightGrouped = mapDb.treeMap<Any?, Any>(UUID.randomUUID().toString(), Serializer.JAVA, Serializer.JAVA).create()
+        rightGrouped.putAll(rightRows.groupBy { formatGroupKey(it.getValues().get(groupProspect.rightField), groupProspect.asNumber) })
+
+        val result = CacheList.list<DataGroup>(mapDb)
+
+        (leftGrouped.keys + rightGrouped.keys).forEach { key ->
+            run {
+                val leftList = leftGrouped.getOrDefault(key, emptyList<Data>()) as List<Data>
+                val rightList = rightGrouped.getOrDefault(key, emptyList<Data>()) as List<Data>
+
+                if (leftList.isNotEmpty() && rightList.isNotEmpty()) {
+                    result.add(DataGroup(leftList, rightList))
+                }
+            }
+        }
+        return result
+    }
