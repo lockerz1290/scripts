@@ -1,3 +1,21 @@
+    private fun groupMapData(leftGrouped: HTreeMap<Any?, Any>, rightGrouped: HTreeMap<Any?, Any>, allKeys: Set<Any?>, result: MutableList<DataGroup>): List<DataGroup> {
+        log.debug("Starting Listing")
+        allKeys.forEach { key ->
+            val leftListKey = leftGrouped[key]
+            if(leftListKey != null) {
+                val rightListKey = rightGrouped[key]
+                if (rightListKey != null) {
+                    val leftList = leftListKey as? List<Data> ?: emptyList()
+                    val rightList = rightGrouped[key] as? List<Data> ?: emptyList()
+                    if (leftList.isNotEmpty() && rightList.isNotEmpty()) {
+                        result.add(DataGroup(leftList, rightList))
+                    }
+                }
+            }
+        }
+        return result;
+    }
+
     override fun groupData(leftRows: List<Data>, rightRows: List<Data>, groupProspects: List<GroupProspect>): List<DataGroup> {
         var result: MutableList<DataGroup> = CacheList.list(mapDb)
         result.add(DataGroup(leftRows, rightRows))
@@ -6,40 +24,22 @@
             log.debug("Group prospect: $groupProspect")
             val newResult: MutableList<DataGroup> = CacheList.list(mapDb)
             log.debug("CacheList Created $groupProspect")
+            val leftGrouped = mapDb.hashMap<Any?, Any>(UUID.randomUUID().toString(), Serializer.JAVA, Serializer.JAVA).create()
+            leftGrouped.putAll(leftRows.groupBy { formatGroupKey(it.getValues()[groupProspect.leftField], groupProspect.asNumber) })
+            val rightGrouped = mapDb.hashMap<Any?, Any>(UUID.randomUUID().toString(), Serializer.JAVA, Serializer.JAVA).create()
+            rightGrouped.putAll(rightRows.groupBy { formatGroupKey(it.getValues()[groupProspect.rightField], groupProspect.asNumber) })
+            val allKeys = HashSet<Any?>()
+            allKeys.addAll(leftGrouped.keys)
+            allKeys.addAll(rightGrouped.keys)
+            log.debug("LeftGrouped ${leftGrouped.size} RightGrouped ${rightGrouped.size}")
             result.forEach {
                 log.debug("${it.leftRows}, ${it.rightRows}")
-                newResult.addAll(groupData(it.leftRows, it.rightRows, groupProspect))
+                groupMapData(leftGrouped, rightGrouped, allKeys, newResult)
+                log.debug("Result size ${result.size}")
             }
             result = newResult
             log.debug("Group prospect finished: $groupProspect")
         }
-        return result
-    }
-
-    override fun groupData(leftRows: List<Data>, rightRows: List<Data>, groupProspect: GroupProspect): List<DataGroup> {
-        //to wynieśc do funkcji wyżej
-        val leftGrouped = mapDb.treeMap<Any?, Any>(UUID.randomUUID().toString(), Serializer.JAVA, Serializer.JAVA).create()
-        leftGrouped.putAll(leftRows.groupBy { formatGroupKey(it.getValues()[groupProspect.leftField], groupProspect.asNumber) })
-
-        val rightGrouped = mapDb.treeMap<Any?, Any>(UUID.randomUUID().toString(), Serializer.JAVA, Serializer.JAVA).create()
-        rightGrouped.putAll(rightRows.groupBy { formatGroupKey(it.getValues().get(groupProspect.rightField), groupProspect.asNumber) })
-
-        //potencjalne miejsce tworzy niepotrzebne setki obiektów nie tworzyć miliona obiektów jedna lista i do niej dodawać
-        val result = CacheList.list<DataGroup>(mapDb)
-        log.debug("Cache List groupData Created left ${leftGrouped.size} right ${rightGrouped.size}")
-        (leftGrouped.keys + rightGrouped.keys).forEach { key ->
-            run {
-                val leftList = leftGrouped.getOrDefault(key, emptyList<Data>()) as List<Data>
-                val rightList = rightGrouped.getOrDefault(key, emptyList<Data>()) as List<Data>
-
-                if (leftList.isNotEmpty() && rightList.isNotEmpty()) {
-                    log.debug("Rows: ${leftList} / ${rightList}")
-                    result.add(DataGroup(leftList, rightList))
-                }
-            }
-        }
-        //wszystko zwraca jeden obiekt
-        log.debug("Cache List created result ${result.size}, ${result}")
         return result
     }
 
