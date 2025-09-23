@@ -32,3 +32,15 @@
         }
         return result
     }
+
+class CacheResultStorage(mapDb: DB): IResultStorage {
+    private val matches = mapDb.indexTreeList(UUID.randomUUID().toString()).create()
+    private val leftMatched = mapDb.hashSet(UUID.randomUUID().toString(), Serializer.UUID).create()
+    private val rightMatched = mapDb.hashSet(UUID.randomUUID().toString(), Serializer.UUID).create()
+
+    override fun addMatch(leftIds: List<UUID>, rightIds: List<UUID>, rule: Rule, additionOutputColumnsResultJson: String?) {
+        val pair = Match(leftIds, rightIds, rule.name, rule.category, additionOutputColumnsResultJson)
+        matches.add(pair)
+        leftMatched.addAll(leftIds)
+        rightMatched.addAll(rightIds)
+    }
