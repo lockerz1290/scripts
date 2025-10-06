@@ -1,0 +1,51 @@
+# Pliki i katalogi
+$InputFile = "npm-depends.txt"
+$OutputDir = "npm-tarballs"
+$FailedFile = "failed-downloads.txt"
+$SuccessFile = "successful-downloads.txt"
+
+# Tworzymy katalog i czyścimy pliki
+if (-not (Test-Path $OutputDir)) { New-Item -ItemType Directory -Path $OutputDir | Out-Null }
+if (Test-Path $FailedFile) { Remove-Item $FailedFile }
+if (Test-Path $SuccessFile) { Remove-Item $SuccessFile }
+
+Write-Host "📦 Pobieranie paczek z $InputFile ..."
+
+# Czytanie URL-i linia po linii
+Get-Content $InputFile | ForEach-Object {
+    $url = $_.Trim()
+    if ($url -ne "") {
+        $filename = [System.IO.Path]::GetFileName($url)
+        $outputPath = Join-Path $OutputDir $filename
+
+        Write-Host "⬇️  Pobieram $filename z $url"
+
+        # retry i timeout
+        $maxRetries = 3
+        $success = $false
+        for ($i = 1; $i -le $maxRetries; $i++) {
+            try {
+                # Ignorowanie certyfikatu SSL
+                Invoke-WebRequest -Uri $url -OutFile $outputPath -UseBasicParsing -ErrorAction Stop -SslProtocol Tls12
+                $success = $true
+                break
+            } catch {
+                Write-Host "⚠️ Próba $i nie powiodła się: $($_.Exception.Message)"
+                Start-Sleep -Seconds 2
+            }
+        }
+
+        if ($success) {
+            Add-Content -Path $SuccessFile -Value $url
+        } else {
+            Add-Content -Path $FailedFile -Value $url
+        }
+    }
+}
+
+Write-Host "✅ Pobieranie zakończone."
+if (Test-Path $FailedFile -and (Get-Content $FailedFile).Length -gt 0) {
+    Write-Host "⚠️ Niektóre pobrania się nie powiodły. Sprawdź plik: $FailedFile"
+} else {
+    Write-Host "Wszystkie paczki pobrane poprawnie."
+}
