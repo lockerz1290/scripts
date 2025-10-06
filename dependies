@@ -1,0 +1,31 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+INPUT_FILE="npm-depends.txt"
+OUTPUT_DIR="npm-tarballs"
+FAILED_FILE="failed-downloads.txt"
+
+mkdir -p "$OUTPUT_DIR"
+> "$FAILED_FILE"
+
+echo "📦 Pobieranie paczek z $INPUT_FILE ..."
+
+while IFS= read -r url || [ -n "$url" ]; do
+  # pomijamy puste linie
+  [ -z "$url" ] && continue
+
+  filename="$(basename "$url")"
+  echo "⬇️  Pobieram $filename z $url"
+
+  if ! wget -q -O "$OUTPUT_DIR/$filename" "$url"; then
+    echo "⚠️  Nie udało się pobrać $url"
+    echo "$url" >> "$FAILED_FILE"
+  fi
+done < "$INPUT_FILE"
+
+echo "✅ Pobieranie zakończone."
+if [ -s "$FAILED_FILE" ]; then
+  echo "⚠️ Niektóre pobrania się nie powiodły. Sprawdź plik: $FAILED_FILE"
+else
+  echo "Wszystkie paczki pobrane poprawnie."
+fi
