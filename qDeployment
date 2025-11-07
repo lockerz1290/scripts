@@ -1,0 +1,61 @@
+pipeline {
+  agent any
+
+  environment {
+    JIRA_URL  = 'https://twojafirma.atlassian.net'     // adres JIRA
+    JIRA_USER = 'twoj.email@twojafirma.pl'              // login (email)
+  }
+
+  stages {
+    stage('Create JIRA Tickets for Applications') {
+      steps {
+        script {
+          // --- mapa aplikacja → URL ---
+          def apps = [
+            "reconciliation-core" : "https://core.example.com/health",
+            "data-collector"      : "https://collector.example.com/status",
+            "ui-dashboard"        : "https://ui.example.com"
+          ]
+
+          // --- pobranie tokena z credentials ---
+          withCredentials([string(credentialsId: 'JIRA_TOKEN', variable: 'JIRA_TOKEN')]) {
+
+            // iteracja po mapie
+            apps.each { appName, appUrl ->
+
+              echo "🔹 Tworzenie ticketa dla aplikacji: ${appName}"
+
+              def issueData = [
+                fields: [
+                  project: [key: "DEV"],
+                  summary: "Monitor: ${appName} – zgłoszenie automatyczne",
+                  description: """Automatyczne zgłoszenie dla aplikacji **${appName}**
+URL: ${appUrl}
+Utworzone przez Jenkins Pipeline #${env.BUILD_NUMBER}.""",
+                  issuetype: [name: "Task"],
+                  priority: [name: "Medium"],
+                  labels: ["jenkins", "${appName}"]
+                ]
+              ]
+
+              // konwersja mapy do JSON
+              def jsonData = groovy.json.JsonOutput.toJson(issueData)
+
+              // przygotowanie i wykonanie żądania
+              def curlCmd = """
+                curl -s -X POST \
+                  -H "Content-Type: application/json" \
+                  -u ${JIRA_USER}:${JIRA_TOKEN} \
+                  --data '${jsonData}' \
+                  ${JIRA_URL}/rest/api/3/issue
+              """
+
+              def response = sh(script: curlCmd, returnStdout: true).trim()
+              echo "📨 Odpowiedź JIRA: ${response}"
+            }
+          }
+        }
+      }
+    }
+  }
+}
